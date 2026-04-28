@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Matriz de Seguimiento Semanal — ART</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root { --bg:#efefef; --bg-card:#fff; --text:#111; --text-muted:#666; --border:#d0d0d0; --radius:10px; }
+body { font-family:'Barlow',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+
+.header {
+  background:linear-gradient(135deg,#0a0a0a 0%,#1a1a1a 60%,#2e2e2e 100%);
+  color:#fff; padding:0 24px; display:flex; align-items:center;
+  justify-content:space-between; height:64px;
+  box-shadow:0 3px 16px rgba(0,0,0,.25); position:sticky; top:0; z-index:100;
+}
+.header-brand { display:flex; align-items:center; gap:12px; }
+.header-logo {
+  width:38px; height:38px; background:#d0d0d0; border-radius:8px;
+  display:flex; align-items:center; justify-content:center;
+  font-family:'Barlow Condensed',sans-serif; font-weight:800; font-size:18px; color:#111;
+}
+.header-title { font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:18px; }
+.header-sub   { font-size:11px; opacity:.75; font-weight:300; }
+.header-right { display:flex; align-items:center; gap:10px; }
+.sync-status {
+  font-size:11px; padding:4px 10px; border-radius:20px; font-weight:600;
+  display:flex; align-items:center; gap:5px; white-space:nowrap;
+}
+.sync-status.ok   { background:rgba(255,255,255,.12); color:#bbb; }
+.sync-status.sync { background:rgba(255,255,255,.18); color:#fff; }
+.sync-status.err  { background:rgba(255,80,80,.25);   color:#faa; }
+.sync-dot { width:7px; height:7px; border-radius:50%; background:currentColor; }
+.sync-dot.pulse { animation:pulse 1.2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+.btn-export {
+  background:#d0d0d0; color:#111; border:none; border-radius:8px;
+  padding:8px 18px; font-family:'Barlow Condensed',sans-serif; font-weight:700;
+  font-size:14px; cursor:pointer; display:flex; align-items:center; gap:6px;
+  transition:all .2s; white-space:nowrap;
+}
+.btn-export:hover   { background:#e8e8e8; transform:translateY(-1px); }
+.btn-export:disabled { opacity:.6; cursor:not-allowed; transform:none; }
+
+.semana-bar {
+  background:#0a0a0a; color:#fff; display:flex; align-items:center;
+  justify-content:center; gap:16px; padding:8px 24px;
+}
+.semana-btn {
+  background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3);
+  color:#fff; border-radius:6px; width:28px; height:28px; cursor:pointer;
+  font-size:16px; display:flex; align-items:center; justify-content:center; transition:background .15s;
+}
+.semana-btn:hover { background:rgba(255,255,255,.28); }
+.semana-label { font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:14px; }
+#btn-semana-actual {
+  background:#d0d0d0; color:#111; border:none; border-radius:6px;
+  padding:3px 10px; font-size:11px; font-weight:700; cursor:pointer; display:none;
+}
+
+.layout { display:flex; height:calc(100vh - 96px); overflow:hidden; }
+
+.sidebar {
+  width:240px; min-width:200px; background:var(--bg-card);
+  border-right:1.5px solid var(--border); display:flex; flex-direction:column; overflow:hidden;
+}
+.sidebar-head {
+  padding:14px 16px 10px; border-bottom:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between;
+}
+.sidebar-title { font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:13px; color:var(--text-muted); letter-spacing:1px; text-transform:uppercase; }
+.btn-add {
+  background:#1a1a1a; color:#fff; border:none; border-radius:6px;
+  width:26px; height:26px; font-size:18px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; transition:background .15s;
+}
+.btn-add:hover { background:#333; }
+.sidebar-list { flex:1; overflow-y:auto; padding:6px 0; }
+.conv-item {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:10px 14px; cursor:pointer; border-left:3px solid transparent; transition:all .15s;
+}
+.conv-item:hover       { background:#f2f2f2; }
+.conv-item.active      { background:#e8e8e8; border-left-color:#1a1a1a; }
+.conv-name             { font-weight:600; font-size:13.5px; color:var(--text); }
+.conv-badge            { font-size:10px; background:#333; color:#fff; border-radius:10px; padding:1px 6px; margin-left:4px; font-weight:700; }
+.conv-actions          { display:flex; gap:4px; opacity:0; transition:opacity .15s; }
+.conv-item:hover .conv-actions, .conv-item.active .conv-actions { opacity:1; }
+.btn-icon {
+  background:none; border:none; cursor:pointer; color:var(--text-muted);
+  width:22px; height:22px; border-radius:4px; font-size:13px;
+  display:flex; align-items:center; justify-content:center; transition:all .15s;
+}
+.btn-icon:hover { background:rgba(0,0,0,.08); color:var(--text); }
+
+.main { flex:1; overflow-y:auto; padding:20px 24px; }
+.main-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:18px; gap:12px; }
+.conv-titulo  { font-family:'Barlow Condensed',sans-serif; font-weight:800; font-size:22px; color:#111; }
+.conv-semana  { font-size:13px; color:var(--text-muted); margin-top:2px; }
+.progreso     { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+.progreso-text     { font-size:12px; color:var(--text-muted); font-weight:500; }
+.progreso-bar-wrap { width:100px; height:8px; background:var(--border); border-radius:4px; overflow:hidden; }
+.progreso-bar      { height:100%; background:#333; border-radius:4px; transition:width .4s; }
+
+.act-grid { display:flex; flex-direction:column; gap:10px; }
+.act-card {
+  background:var(--bg-card); border:1.5px solid var(--border);
+  border-radius:var(--radius); padding:14px 16px; transition:border-color .15s,box-shadow .15s;
+}
+.act-card:focus-within { border-color:#333; box-shadow:0 0 0 3px rgba(0,0,0,.06); }
+.act-card.filled       { border-left:3px solid #333; }
+.act-label { font-weight:600; font-size:13px; color:#111; margin-bottom:8px; display:flex; align-items:center; gap:8px; }
+.act-num { background:#1a1a1a; color:#fff; border-radius:50%; width:20px; height:20px; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.act-num.filled { background:#888; }
+textarea {
+  width:100%; border:1.5px solid var(--border); border-radius:7px;
+  padding:9px 11px; font-family:'Barlow',sans-serif; font-size:13px;
+  color:var(--text); resize:vertical; min-height:72px; outline:none;
+  transition:border-color .15s; background:#fafafa; line-height:1.5;
+}
+textarea:focus { border-color:#333; background:#fff; }
+.act-default-btn {
+  margin-top:6px; background:none; border:none; cursor:pointer;
+  font-size:11px; color:var(--text-muted); padding:2px 0;
+  text-decoration:underline; text-underline-offset:2px; transition:color .15s;
+}
+.act-default-btn:hover { color:#111; }
+
+.empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center; height:60vh; gap:16px; color:var(--text-muted); }
+.empty-icon  { font-size:56px; opacity:.35; }
+.empty-text  { font-size:16px; font-family:'Barlow Condensed',sans-serif; font-weight:600; }
+
+.loading-overlay {
+  position:fixed; inset:0; background:rgba(10,10,10,.85);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  z-index:500; gap:16px; color:#fff;
+}
+.loading-overlay.hidden { display:none; }
+.spinner { width:44px; height:44px; border:4px solid rgba(255,255,255,.2); border-top-color:#fff; border-radius:50%; animation:spin .8s linear infinite; }
+@keyframes spin { to{transform:rotate(360deg)} }
+.loading-text { font-family:'Barlow Condensed',sans-serif; font-size:16px; font-weight:600; letter-spacing:.5px; }
+
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; z-index:200; backdrop-filter:blur(2px); }
+.modal-overlay.active { display:flex; }
+.modal-box     { background:#fff; border-radius:14px; width:420px; max-width:94vw; box-shadow:0 20px 60px rgba(0,0,0,.25); overflow:hidden; }
+.modal-header  { background:#1a1a1a; color:#fff; padding:14px 18px; display:flex; align-items:center; justify-content:space-between; font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:16px; }
+.modal-close   { background:rgba(255,255,255,.2); border:none; color:#fff; width:28px; height:28px; border-radius:6px; cursor:pointer; font-size:14px; }
+.modal-body    { padding:20px 18px; }
+.modal-body label { display:block; font-size:13px; font-weight:600; color:var(--text-muted); margin-bottom:6px; }
+.modal-body input { width:100%; border:1.5px solid var(--border); border-radius:8px; padding:10px 12px; font-size:14px; outline:none; font-family:'Barlow',sans-serif; }
+.modal-body input:focus { border-color:#333; }
+.modal-hint    { font-size:11.5px; color:var(--text-muted); margin-top:5px; }
+.modal-actions { display:flex; gap:10px; margin-top:18px; justify-content:flex-end; }
+.btn-primary   { background:#1a1a1a; color:#fff; border:none; border-radius:8px; padding:9px 20px; font-weight:700; font-size:13px; cursor:pointer; font-family:'Barlow Condensed',sans-serif; transition:background .15s; }
+.btn-primary:hover { background:#333; }
+.btn-secondary { background:var(--bg); color:var(--text); border:1.5px solid var(--border); border-radius:8px; padding:9px 16px; font-size:13px; cursor:pointer; transition:background .15s; }
+.btn-secondary:hover { background:var(--border); }
+.btn-danger    { background:#222; color:#fff; border:none; border-radius:8px; padding:9px 20px; font-weight:700; font-size:13px; cursor:pointer; font-family:'Barlow Condensed',sans-serif; transition:background .15s; }
+.btn-danger:hover { background:#000; }
+.danger-msg    { background:#f0f0f0; border-radius:8px; padding:12px; font-size:13px; color:#2a2a2a; line-height:1.5; border-left:3px solid #555; }
+
+.toast { position:fixed; bottom:24px; right:24px; z-index:300; background:#111; color:#fff; border-radius:10px; padding:12px 20px; font-size:13.5px; font-weight:500; box-shadow:0 8px 24px rgba(0,0,0,.3); display:none; animation:slideUp .3s ease; }
+.toast.err  { background:#333; border-left:3px solid #888; }
+.toast.warn { background:#444; }
+@keyframes slideUp { from{transform:translateY(20px);opacity:0} to{transform:translateY(0);opacity:1} }
+
+::-webkit-scrollbar       { width:6px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+@media(max-width:640px){ .sidebar{width:180px} .main{padding:14px} .header-title{font-size:14px} }
+</style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loading-overlay">
+  <div class="spinner"></div>
+  <div class="loading-text">Conectando con Firebase...</div>
+</div>
+
+<header class="header">
+  <div class="header-brand">
+    <div class="header-logo">ART</div>
+    <div>
+      <div class="header-title">Matriz de Seguimiento Semanal</div>
+      <div class="header-sub">Agencia de Renovación del Territorio · Convenios</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="sync-status ok" id="sync-status">
+      <span class="sync-dot" id="sync-dot"></span>
+      <span id="sync-text">Conectando...</span>
+    </div>
+    <button class="btn-export" id="btn-export">⬇ Exportar Excel</button>
+  </div>
+</header>
+
+<div class="semana-bar">
+  <button class="semana-btn" id="btn-semana-prev">‹</button>
+  <span class="semana-label" id="semana-label">📅 Semana del ...</span>
+  <button id="btn-semana-actual">Semana actual</button>
+  <button class="semana-btn" id="btn-semana-next">›</button>
+</div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-head">
+      <span class="sidebar-title">Convenios</span>
+      <button class="btn-add" id="btn-nuevo-convenio" title="Nuevo convenio">+</button>
+    </div>
+    <div class="sidebar-list" id="sidebar-list"></div>
+  </aside>
+  <main class="main" id="main-content"></main>
+</div>
+
+<div class="modal-overlay" id="modal-nuevo">
+  <div class="modal-box">
+    <div class="modal-header"><span>➕ Nuevo Convenio</span><button class="modal-close" onclick="cerrarModal('modal-nuevo')">✕</button></div>
+    <div class="modal-body">
+      <label>Número / Nombre del Convenio</label>
+      <input type="text" id="input-nuevo-nombre" placeholder="Ej: 1234-2026">
+      <div class="modal-hint">Puede incluir letras, números y guiones.</div>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="cerrarModal('modal-nuevo')">Cancelar</button>
+        <button class="btn-primary"   onclick="crearConvenio()">Crear convenio</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-editar">
+  <div class="modal-box">
+    <div class="modal-header"><span>✎ Editar Convenio</span><button class="modal-close" onclick="cerrarModal('modal-editar')">✕</button></div>
+    <div class="modal-body">
+      <label>Nombre del Convenio</label>
+      <input type="text" id="input-editar-nombre">
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="cerrarModal('modal-editar')">Cancelar</button>
+        <button class="btn-primary"   onclick="guardarEdicion()">Guardar cambios</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-eliminar">
+  <div class="modal-box">
+    <div class="modal-header"><span>⚠ Eliminar Convenio</span><button class="modal-close" onclick="cerrarModal('modal-eliminar')">✕</button></div>
+    <div class="modal-body">
+      <div class="danger-msg" id="msg-eliminar"></div>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="cerrarModal('modal-eliminar')">Cancelar</button>
+        <button class="btn-danger"    onclick="confirmarEliminar()">Sí, eliminar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp }           from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, setDoc, deleteDoc, collection, getDocs }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+// ─── FIREBASE ────────────────────────────────────────────────────────────────
+const app = initializeApp({
+  apiKey:            "AIzaSyAm0XhNIrkAlnw_qQjuRCKvMNRR_Z7rvG8",
+  authDomain:        "matriz-art-seguimiento.firebaseapp.com",
+  projectId:         "matriz-art-seguimiento",
+  storageBucket:     "matriz-art-seguimiento.firebasestorage.app",
+  messagingSenderId: "952256887668",
+  appId:             "1:952256887668:web:cb67b448714a4aa1108a21"
+});
+const db = getFirestore(app);
+
+// ─── CONSTANTES ──────────────────────────────────────────────────────────────
+const ACTIVIDADES = [
+  "Formato 104","CCSS","Plan de acción 2026","Comité Operativo","Comité de Compras",
+  "Informe Técnico del Municipio/Conviniente","Informe Financiero del Municipio/Conviniente",
+  "Informe de Supervisión ART","Proyección Correos y/o Orfeos",
+  "Actualización Ficha Resumen del proyecto","Actualización ONE Carpeta del Convenio",
+  "Actas de Reuniones","Información para la DIARI-APPUI de la CGR.",
+  "Seguimiento y control","Informes de visitas de campo"
+];
+const DEFAULT_VALUE = "Durante la semana no se realizó esta actividad";
+const CONVENIOS_INICIALES = [
+  {id:"2505-2025",nombre:"2505-2025"},{id:"2176-2025",nombre:"2176-2025"},
+  {id:"2387-2024",nombre:"2387-2024"},{id:"0098-2025",nombre:"0098-2025"},
+  {id:"0069-2025",nombre:"0069-2025"}
+];
+
+// ─── ESTADO ───────────────────────────────────────────────────────────────────
+let state = { convenios:[], registros:{}, convenioActivo:null, semanaOffset:0, editandoId:null, eliminandoId:null };
+
+// ─── SYNC UI ──────────────────────────────────────────────────────────────────
+function setSyncStatus(tipo, texto) {
+  document.getElementById('sync-status').className = 'sync-status ' + tipo;
+  document.getElementById('sync-text').textContent  = texto;
+  document.getElementById('sync-dot').className     = 'sync-dot' + (tipo==='sync'?' pulse':'');
+}
+
+// ─── FIRESTORE ────────────────────────────────────────────────────────────────
+async function fbCargarConvenios() {
+  const snap = await getDocs(collection(db,'convenios'));
+  if (snap.empty) {
+    for (const [i,c] of CONVENIOS_INICIALES.entries())
+      await setDoc(doc(db,'convenios',c.id),{nombre:c.nombre,orden:i});
+    return [...CONVENIOS_INICIALES];
+  }
+  const lista = [];
+  snap.forEach(d => lista.push({id:d.id,...d.data()}));
+  return lista.sort((a,b)=>(a.orden||0)-(b.orden||0));
+}
+
+async function fbGuardarConvenio(conv, orden) {
+  await setDoc(doc(db,'convenios',conv.id),{nombre:conv.nombre,orden});
+}
+
+async function fbEliminarConvenio(id) {
+  await deleteDoc(doc(db,'convenios',id));
+  const snap = await getDocs(collection(db,'registros'));
+  const ops = [];
+  snap.forEach(d=>{ if(d.id.startsWith(id+'__')) ops.push(deleteDoc(doc(db,'registros',d.id))); });
+  await Promise.all(ops);
+}
+
+async function fbCargarRegistros() {
+  const snap = await getDocs(collection(db,'registros'));
+  const regs = {};
+  snap.forEach(d=>{
+    const {convenioId,semanaKey,actividades} = d.data();
+    if(!regs[convenioId]) regs[convenioId]={};
+    regs[convenioId][semanaKey] = actividades||{};
+  });
+  return regs;
+}
+
+let saveTimer;
+function fbGuardar(convId, semanaKey) {
+  setSyncStatus('sync','Guardando...');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    try {
+      const actividades = state.registros[convId]?.[semanaKey] || {};
+      await setDoc(doc(db,'registros',`${convId}__${semanaKey}`),
+        {convenioId:convId, semanaKey, actividades, updatedAt:Date.now()});
+      setSyncStatus('ok','Guardado ✓');
+    } catch(e) {
+      setSyncStatus('err','Error al guardar');
+      showToast('Error al guardar: '+e.message,'err');
+    }
+  }, 1200);
+}
+
+// ─── SEMANA ───────────────────────────────────────────────────────────────────
+function getMonday(offset) {
+  const now=new Date(), d=now.getDay(), m=new Date(now);
+  m.setDate(now.getDate()-((d+6)%7)+offset*7); m.setHours(0,0,0,0);
+  return m;
+}
+function getWeekKey(o)   { return getMonday(o).toISOString().slice(0,10); }
+function getWeekLabel(o) {
+  const m=getMonday(o), s=new Date(m); s.setDate(m.getDate()+6);
+  const f=d=>d.toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit',year:'numeric'});
+  return `${f(m)} al ${f(s)}`;
+}
+
+// ─── TOAST ────────────────────────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg,tipo='ok') {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className='toast'+(tipo==='err'?' err':tipo==='warn'?' warn':'');
+  t.style.display='block'; clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{t.style.display='none';},2800);
+}
+window.showToast = showToast;
+
+// ─── MODALES ──────────────────────────────────────────────────────────────────
+function abrirModal(id)  { document.getElementById(id).classList.add('active'); }
+function cerrarModal(id) { document.getElementById(id).classList.remove('active'); }
+window.cerrarModal = cerrarModal;
+document.querySelectorAll('.modal-overlay').forEach(m=>{
+  m.addEventListener('click',e=>{ if(e.target===m) m.classList.remove('active'); });
+});
+
+// ─── RENDER ───────────────────────────────────────────────────────────────────
+function renderSidebar() {
+  const sk   = getWeekKey(state.semanaOffset);
+  const list = document.getElementById('sidebar-list');
+  if (!state.convenios.length) {
+    list.innerHTML='<div style="padding:20px 16px;font-size:12px;color:var(--text-muted);text-align:center">Sin convenios.<br>Crea uno con el botón +</div>';
+    return;
+  }
+  list.innerHTML = state.convenios.map(c=>{
+    const regs   = (state.registros[c.id]||{})[sk]||{};
+    const filled = ACTIVIDADES.filter(a=>regs[a]&&regs[a]!==DEFAULT_VALUE).length;
+    const active = state.convenioActivo===c.id;
+    return `<div class="conv-item${active?' active':''}" onclick="seleccionarConvenio('${c.id}')">
+      <div class="conv-name">${escHtml(c.nombre)}${filled>0?`<span class="conv-badge">${filled}</span>`:''}</div>
+      <div class="conv-actions">
+        <button class="btn-icon" title="Editar"   onclick="event.stopPropagation();abrirEditar('${c.id}')">✎</button>
+        <button class="btn-icon" title="Eliminar" onclick="event.stopPropagation();abrirEliminar('${c.id}')">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderMain() {
+  const main = document.getElementById('main-content');
+  const conv = state.convenios.find(c=>c.id===state.convenioActivo);
+  if (!conv) { main.innerHTML='<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">Selecciona o crea un convenio</div></div>'; return; }
+  const sk  = getWeekKey(state.semanaOffset);
+  const sl  = getWeekLabel(state.semanaOffset);
+  const act = (state.registros[conv.id]||{})[sk]||{};
+  const d   = ACTIVIDADES.filter(a=>act[a]&&act[a]!==DEFAULT_VALUE).length;
+  const pct = Math.round(d/ACTIVIDADES.length*100);
+  main.innerHTML=`
+    <div class="main-header">
+      <div>
+        <div class="conv-titulo">CONVENIO ${escHtml(conv.nombre)}</div>
+        <div class="conv-semana">Semana del ${sl}</div>
+      </div>
+      <div class="progreso">
+        <div class="progreso-text">${d}/${ACTIVIDADES.length} diligenciados</div>
+        <div class="progreso-bar-wrap"><div class="progreso-bar" style="width:${pct}%"></div></div>
+      </div>
+    </div>
+    <div class="act-grid">
+      ${ACTIVIDADES.map((a,i)=>{
+        const val    = act[a]||'';
+        const filled = val && val!==DEFAULT_VALUE;
+        return `<div class="act-card${filled?' filled':''}" id="card-${i}">
+          <div class="act-label"><span class="act-num${filled?' filled':''}">${i+1}</span>${escHtml(a)}</div>
+          <textarea rows="3"
+            placeholder="Describe las actividades de &quot;${escAttr(a)}&quot;."
+            onchange="setActividad(${i},this.value)"
+            oninput="updateCard(${i},this.value)"
+          >${escHtml(val)}</textarea>
+          <button class="act-default-btn" onclick="marcarNoRealizada(${i})">Marcar como "no realizada"</button>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+function renderSemanaBar() {
+  document.getElementById('semana-label').textContent = '📅 Semana del '+getWeekLabel(state.semanaOffset);
+  document.getElementById('btn-semana-actual').style.display = state.semanaOffset!==0?'inline-block':'none';
+}
+function renderAll() { renderSemanaBar(); renderSidebar(); renderMain(); }
+
+// ─── ACTIVIDADES ──────────────────────────────────────────────────────────────
+function setActividad(idx, value) {
+  const cid=state.convenioActivo, sk=getWeekKey(state.semanaOffset);
+  if(!state.registros[cid]) state.registros[cid]={};
+  if(!state.registros[cid][sk]) state.registros[cid][sk]={};
+  state.registros[cid][sk][ACTIVIDADES[idx]]=value;
+  updateProgressBar(); renderSidebar();
+  fbGuardar(cid, sk);
+}
+window.setActividad = setActividad;
+
+function updateCard(idx, value) {
+  const card=document.getElementById('card-'+idx); if(!card) return;
+  const filled=value&&value!==DEFAULT_VALUE;
+  card.classList.toggle('filled',filled);
+  card.querySelector('.act-num').classList.toggle('filled',filled);
+}
+window.updateCard = updateCard;
+
+function marcarNoRealizada(idx) {
+  const ta=document.querySelector(`#card-${idx} textarea`); if(!ta) return;
+  ta.value=DEFAULT_VALUE; setActividad(idx,DEFAULT_VALUE); updateCard(idx,DEFAULT_VALUE);
+}
+window.marcarNoRealizada = marcarNoRealizada;
+
+function updateProgressBar() {
+  const cid=state.convenioActivo, sk=getWeekKey(state.semanaOffset);
+  const act=(state.registros[cid]||{})[sk]||{};
+  const d=ACTIVIDADES.filter(a=>act[a]&&act[a]!==DEFAULT_VALUE).length;
+  const bar=document.querySelector('.progreso-bar'), txt=document.querySelector('.progreso-text');
+  if(bar) bar.style.width=Math.round(d/ACTIVIDADES.length*100)+'%';
+  if(txt) txt.textContent=`${d}/${ACTIVIDADES.length} diligenciados`;
+}
+
+// ─── CONVENIOS ────────────────────────────────────────────────────────────────
+function seleccionarConvenio(id) { state.convenioActivo=id; renderAll(); }
+window.seleccionarConvenio = seleccionarConvenio;
+
+async function crearConvenio() {
+  const nombre=document.getElementById('input-nuevo-nombre').value.trim();
+  if(!nombre) return;
+  if(state.convenios.find(c=>c.nombre===nombre)){showToast('Ya existe ese convenio.','err');return;}
+  const id=nombre.replace(/[\s\/\\*?\[\]:]/g,'-').toUpperCase()+'-'+Date.now();
+  const conv={id,nombre};
+  try {
+    await fbGuardarConvenio(conv, state.convenios.length);
+    state.convenios.push(conv); state.convenioActivo=id;
+    cerrarModal('modal-nuevo'); document.getElementById('input-nuevo-nombre').value='';
+    renderAll(); showToast(`Convenio ${nombre} creado.`);
+  } catch(e){showToast('Error: '+e.message,'err');}
+}
+window.crearConvenio = crearConvenio;
+
+function abrirEditar(id) {
+  const c=state.convenios.find(c=>c.id===id); if(!c) return;
+  state.editandoId=id; document.getElementById('input-editar-nombre').value=c.nombre;
+  abrirModal('modal-editar'); setTimeout(()=>document.getElementById('input-editar-nombre').focus(),100);
+}
+window.abrirEditar = abrirEditar;
+
+async function guardarEdicion() {
+  const nombre=document.getElementById('input-editar-nombre').value.trim();
+  if(!nombre||!state.editandoId) return;
+  const c=state.convenios.find(c=>c.id===state.editandoId); if(!c) return;
+  try {
+    await fbGuardarConvenio({...c,nombre}, state.convenios.indexOf(c));
+    state.convenios=state.convenios.map(x=>x.id===state.editandoId?{...x,nombre}:x);
+    cerrarModal('modal-editar'); renderAll(); showToast('Convenio actualizado.');
+  } catch(e){showToast('Error: '+e.message,'err');}
+}
+window.guardarEdicion = guardarEdicion;
+
+function abrirEliminar(id) {
+  const c=state.convenios.find(c=>c.id===id); if(!c) return;
+  state.eliminandoId=id;
+  document.getElementById('msg-eliminar').innerHTML=
+    `¿Seguro de eliminar el convenio <strong>${escHtml(c.nombre)}</strong>?<br><br>
+     Se eliminarán <strong>todos los registros</strong> de todas las semanas. No se puede deshacer.`;
+  abrirModal('modal-eliminar');
+}
+window.abrirEliminar = abrirEliminar;
+
+async function confirmarEliminar() {
+  const id=state.eliminandoId; if(!id) return;
+  try {
+    await fbEliminarConvenio(id);
+    state.convenios=state.convenios.filter(c=>c.id!==id);
+    delete state.registros[id];
+    if(state.convenioActivo===id) state.convenioActivo=state.convenios[0]?.id||null;
+    cerrarModal('modal-eliminar'); renderAll(); showToast('Convenio eliminado.','warn');
+  } catch(e){showToast('Error: '+e.message,'err');}
+}
+window.confirmarEliminar = confirmarEliminar;
+
+// ─── EXCEL PROFESIONAL ────────────────────────────────────────────────────────
+function buildHoja(ws, nombreConvenio, semanaLabel, actData) {
+  const COLS=['B','C','D','E','F','G','H','I','J','K','L','M','N','O','P'];
+  const INSTRUCCION="(describir que actividades realicé para este ítem; o manifestar que durante la semana no se realizó ninguna actividad para ese ítem)  \n1. XXXX\n2. XXXX\n3. XXXX";
+  const brd=(t,b,l,r)=>({top:{style:t,color:{rgb:'000000'}},bottom:{style:b,color:{rgb:'000000'}},left:{style:l,color:{rgb:'000000'}},right:{style:r,color:{rgb:'000000'}}});
+  const brdLight=(t,b,l,r)=>({top:{style:t,color:{rgb:'999999'}},bottom:{style:b,color:{rgb:'999999'}},left:{style:l,color:{rgb:l==='medium'?'000000':'999999'}},right:{style:r,color:{rgb:r==='medium'?'000000':'999999'}}});
+
+  // Fila 2: título
+  if(!ws['!merges']) ws['!merges']=[];
+  ws['B2']={v:`ACTIVIDADES REALIZADAS PARA EL CONVENIO ${nombreConvenio} (${semanaLabel})`,t:'s',s:{
+    font:{name:'Arial',bold:true,sz:12,color:{rgb:'FFFFFF'}},
+    fill:{patternType:'solid',fgColor:{rgb:'1F1F1F'}},
+    alignment:{horizontal:'center',vertical:'center',wrapText:true},
+    border:brd('medium','medium','medium','medium')
+  }};
+  ws['!merges'].push({s:{r:1,c:1},e:{r:1,c:15}});
+
+  // Fila 3: cabeceras
+  ACTIVIDADES.forEach((act,i)=>{
+    ws[COLS[i]+'3']={v:act,t:'s',s:{
+      font:{name:'Arial',bold:true,sz:8,color:{rgb:'FFFFFF'}},
+      fill:{patternType:'solid',fgColor:{rgb:'404040'}},
+      alignment:{horizontal:'center',vertical:'center',wrapText:true},
+      border:brd('medium','thin',i===0?'medium':'thin',i===14?'medium':'thin')
+    }};
+  });
+
+  // Fila 4: instrucciones
+  ACTIVIDADES.forEach((act,i)=>{
+    ws[COLS[i]+'4']={v:INSTRUCCION,t:'s',s:{
+      font:{name:'Arial',italic:true,sz:7,color:{rgb:'999999'}},
+      fill:{patternType:'solid',fgColor:{rgb:'F5F5F5'}},
+      alignment:{horizontal:'left',vertical:'top',wrapText:true},
+      border:brdLight('thin','thin',i===0?'medium':'thin',i===14?'medium':'thin')
+    }};
+  });
+
+  // Fila 5: datos
+  ACTIVIDADES.forEach((act,i)=>{
+    const val=actData[act]||DEFAULT_VALUE, vacio=(val===DEFAULT_VALUE||!val);
+    ws[COLS[i]+'5']={v:val,t:'s',s:{
+      font:{name:'Arial',sz:9,italic:vacio,color:{rgb:vacio?'888888':'111111'}},
+      fill:{patternType:'solid',fgColor:{rgb:vacio?'FAFAFA':'FFFFFF'}},
+      alignment:{horizontal:'left',vertical:'top',wrapText:true},
+      border:brdLight('thin','medium',i===0?'medium':'thin',i===14?'medium':'thin')
+    }};
+  });
+
+  ws['!ref']  = 'A1:P5';
+  ws['!cols'] = [{wch:2},...ACTIVIDADES.map(()=>({wch:24}))];
+  ws['!rows'] = [{}/*fila1*/,{hpt:38}/*titulo*/,{hpt:55}/*cabeceras*/,{hpt:55}/*instrucciones*/,{hpt:90}/*datos*/];
+}
+
+document.getElementById('btn-export').addEventListener('click', async ()=>{
+  const btn=document.getElementById('btn-export');
+  btn.disabled=true; btn.textContent='⏳ Exportando...';
+  try {
+    const sk=getWeekKey(state.semanaOffset);
+    const sl=`SEMANA DEL ${getWeekLabel(state.semanaOffset).toUpperCase()}`;
+    const wb=XLSX.utils.book_new();
+    state.convenios.forEach(c=>{
+      const act=(state.registros[c.id]||{})[sk]||{};
+      const ws={};
+      buildHoja(ws,c.nombre,sl,act);
+      XLSX.utils.book_append_sheet(wb,ws,c.nombre.replace(/[\\/*?[\]:]/g,'-').slice(0,31));
+    });
+    XLSX.writeFile(wb,`Seguimiento_ART_${sk.replace(/-/g,'')}.xlsx`);
+    showToast('Excel generado exitosamente.');
+  } catch(e){ showToast('Error al exportar: '+e.message,'err'); console.error(e); }
+  btn.disabled=false; btn.textContent='⬇ Exportar Excel';
+});
+
+// ─── CONTROLES ────────────────────────────────────────────────────────────────
+document.getElementById('btn-semana-prev').addEventListener('click',   ()=>{state.semanaOffset--;renderAll();});
+document.getElementById('btn-semana-next').addEventListener('click',   ()=>{state.semanaOffset++;renderAll();});
+document.getElementById('btn-semana-actual').addEventListener('click', ()=>{state.semanaOffset=0;renderAll();});
+document.getElementById('input-nuevo-nombre').addEventListener('keydown',  e=>{if(e.key==='Enter')crearConvenio();});
+document.getElementById('input-editar-nombre').addEventListener('keydown', e=>{if(e.key==='Enter')guardarEdicion();});
+document.getElementById('btn-nuevo-convenio').addEventListener('click', ()=>{
+  document.getElementById('input-nuevo-nombre').value='';
+  abrirModal('modal-nuevo');
+  setTimeout(()=>document.getElementById('input-nuevo-nombre').focus(),100);
+});
+
+// ─── UTILS ────────────────────────────────────────────────────────────────────
+function escHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escAttr(s){ return String(s).replace(/"/g,'&quot;'); }
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+(async ()=>{
+  try {
+    const [convs, regs] = await Promise.all([fbCargarConvenios(), fbCargarRegistros()]);
+    state.convenios = convs;
+    state.registros = regs;
+    state.convenioActivo = convs[0]?.id || null;
+    setSyncStatus('ok','Conectado ✓');
+  } catch(e) {
+    setSyncStatus('err','Sin conexión');
+    showToast('No se pudo conectar a Firebase.','err');
+  } finally {
+    document.getElementById('loading-overlay').classList.add('hidden');
+    renderAll();
+  }
+})();
+</script>
+</body>
+</html>
